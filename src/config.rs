@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use ansi_term::{Color, Style};
 use toml;
-use xdg::BaseDirectories;
+use directories::ProjectDirs;
 
 use error::TealdeerError::{self, ConfigError};
 
@@ -199,11 +199,11 @@ pub fn get_config_dir() -> Result<PathBuf, TealdeerError> {
     };
 
     // Otherwise, fall back to $XDG_CONFIG_HOME/tealdeer.
-    let xdg_dirs = match BaseDirectories::with_prefix(::NAME) {
-        Ok(dirs) => dirs,
-        Err(_) => return Err(ConfigError("Could not determine XDG base directory.".into())),
+    let xdg_dirs = match ProjectDirs::from("", "", ::NAME) {
+        Some(dirs) => dirs,
+        _ => return Err(ConfigError("Could not determine XDG base directory.".into())),
     };
-    Ok(xdg_dirs.get_config_home())
+    Ok(xdg_dirs.config_dir().to_path_buf())
 }
 
 /// Return the path to the config file.

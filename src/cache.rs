@@ -2,15 +2,13 @@ use std::io::Read;
 use std::fs;
 use std::env;
 use std::path::PathBuf;
+use std::time::SystemTime;
 
-#[cfg(unix)] use std::os::unix::fs::MetadataExt;
-
-use xdg::BaseDirectories;
+use directories::ProjectDirs;
 use flate2::read::GzDecoder;
 use tar::Archive;
 use curl::easy::Easy as CurlEasy;
 use walkdir::{WalkDir, DirEntry};
-use time;
 
 use error::TealdeerError::{self, CacheError, UpdateError};
 use types::OsType;
@@ -47,11 +45,11 @@ impl Cache {
         };
 
         // Otherwise, fall back to $XDG_CACHE_HOME/tealdeer.
-        let xdg_dirs = match BaseDirectories::with_prefix(::NAME) {
-            Ok(dirs) => dirs,
-            Err(_) => return Err(CacheError("Could not determine XDG base directory.".into())),
+        let xdg_dirs = match ProjectDirs::from("", "", ::NAME) {
+            Some(dirs) => dirs,
+            _ => return Err(CacheError("Could not determine XDG base directory.".into())),
         };
-        Ok(xdg_dirs.get_cache_home())
+        Ok(xdg_dirs.cache_dir().to_path_buf())
     }
 
     /// Download the archive
@@ -110,14 +108,15 @@ impl Cache {
         Ok(())
     }
 
-    #[cfg(unix)]
     /// Return the number of seconds since the cache directory was last modified.
-    pub fn last_update(&self) -> Option<i64> {
+    pub fn last_update(&self) -> Option<u64> {
         if let Ok(cache_dir) = self.get_cache_dir() {
             if let Ok(metadata) = fs::metadata(cache_dir.join("tldr-master")) {
-                let mtime = metadata.mtime();
-                let now = time::now_utc().to_timespec();
-                return Some(now.sec - mtime)
+                let mtime = metadata.modified().unwrap();
+                let now = SystemTime::now();
+                return now.duration_since(mtime)
+                    .map(|dur| dur.as_secs())
+                    .ok()
             };
         };
         None
